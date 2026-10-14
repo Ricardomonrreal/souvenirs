@@ -11,3 +11,6 @@ const isSupabaseConfigured = () => {
 const supabaseClient = (window.supabase && isSupabaseConfigured())
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
+
+window.supabaseClient = supabaseClient;
+

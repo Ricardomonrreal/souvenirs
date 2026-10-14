@@ -556,7 +556,7 @@ function scrollToCompleted() {
     }
 }
 
-function reorderPersonInGroup(sourceId, targetId, placeBefore, groupType) {
+async function reorderPersonInGroup(sourceId, targetId, placeBefore, groupType) {
     const isPersonCompleted = (p) => p.items.length > 0 && p.items.every(i => i.completed);
 
     const pending = state.filter(p => !isPersonCompleted(p));
@@ -581,7 +581,18 @@ function reorderPersonInGroup(sourceId, targetId, placeBefore, groupType) {
         state = [...listToReorder, ...completed];
     }
 
+    state.forEach((p, idx) => { p.position = idx + 1; });
     saveState();
+
+    if (window.supabaseClient) {
+        try {
+            await Promise.all(state.map(p => 
+                supabaseClient.from('people').update({ position: p.position }).eq('id', p.id)
+            ));
+        } catch (e) {
+            console.error("Error al guardar orden en Supabase:", e);
+        }
+    }
 }
 
 async function toggleItem(personId, itemId) {
@@ -593,10 +604,11 @@ async function toggleItem(personId, itemId) {
             saveState();
 
             if (window.supabaseClient) {
-                await supabaseClient
+                const { error } = await supabaseClient
                     .from('items')
                     .update({ completed: item.completed })
                     .eq('id', itemId);
+                if (error) console.error("Error al actualizar item en Supabase:", error);
             }
         }
     }
