@@ -225,8 +225,32 @@ let state = [];
 let modalConfig = { type: '', personId: null };
 let collapsedCompleted = {}; // Para guardar el estado de acordeón de completados por persona
 
-// Cargar estado desde localStorage
-function loadState() {
+// Cargar estado desde Supabase (o fallback a localStorage)
+async function loadState() {
+    if (window.supabaseClient) {
+        try {
+            const { data: peopleData, error: peopleError } = await supabaseClient
+                .from('people')
+                .select('id, name, position, items (id, text, completed, position)')
+                .order('position', { ascending: true });
+
+            if (!peopleError && peopleData && peopleData.length > 0) {
+                state = peopleData.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    position: p.position || 0,
+                    items: (p.items || []).sort((a, b) => (a.position || 0) - (b.position || 0))
+                }));
+                localStorage.setItem('gift_tracker_state_v1', JSON.stringify(state));
+                render();
+                return;
+            }
+        } catch (err) {
+            console.warn('No se pudo conectar a Supabase, cargando localmente:', err);
+        }
+    }
+
+    // Fallback LocalStorage si Supabase no está configurado o falla
     const saved = localStorage.getItem('gift_tracker_state_v1');
     if (saved) {
         try {
@@ -237,6 +261,7 @@ function loadState() {
     } else {
         state = defaultData;
     }
+    render();
 }
 
 function saveState() {
@@ -244,12 +269,15 @@ function saveState() {
     render();
 }
 
-function resetData() {
-    if(confirm("¿Deseas restaurar los elementos de ejemplo iniciales?")) {
-        state = JSON.parse(JSON.stringify(defaultData));
-        saveState();
-        showToast("Datos restaurados correctamente");
-    }
+// Suscripción Realtime para actualizar la interfaz si otro dispositivo hace cambios
+function setupSupabaseRealtime() {
+    if (!window.supabaseClient) return;
+
+    supabaseClient
+        .channel('schema-db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'people' }, () => loadState())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => loadState())
+        .subscribe();
 }
 
 function render() {
@@ -556,13 +584,20 @@ function reorderPersonInGroup(sourceId, targetId, placeBefore, groupType) {
     saveState();
 }
 
-function toggleItem(personId, itemId) {
+async function toggleItem(personId, itemId) {
     const person = state.find(p => p.id === personId);
     if (person) {
         const item = person.items.find(i => i.id === itemId);
         if (item) {
             item.completed = !item.completed;
             saveState();
+
+            if (window.supabaseClient) {
+                await supabaseClient
+                    .from('items')
+                    .update({ completed: item.completed })
+                    .eq('id', itemId);
+            }
         }
     }
 }
@@ -648,34 +683,65 @@ function closeModal() {
     document.getElementById('modal').classList.add('hidden');
 }
 
-function handleModalSubmit(e) {
+async function handleModalSubmit(e) {
     e.preventDefault();
     const val = document.getElementById('modal-input-1').value.trim();
     if (!val) return;
 
     if (modalConfig.type === 'add_person') {
+        const tempId = 'p_' + Date.now();
         const newPerson = {
-            id: 'p_' + Date.now(),
+            id: tempId,
             name: val,
+            position: state.length + 1,
             items: []
         };
         state.push(newPerson);
         showToast("Persona agregada");
+
+        if (window.supabaseClient) {
+            const { data } = await supabaseClient
+                .from('people')
+                .insert({ name: val, position: newPerson.position })
+                .select()
+                .single();
+            if (data) newPerson.id = data.id;
+        }
     } else if (modalConfig.type === 'edit_person') {
         const person = state.find(p => p.id === modalConfig.personId);
         if (person) {
             person.name = val;
             showToast("Nombre actualizado");
+
+            if (window.supabaseClient) {
+                await supabaseClient
+                    .from('people')
+                    .update({ name: val })
+                    .eq('id', person.id);
+            }
         }
     } else if (modalConfig.type === 'add_item') {
         const person = state.find(p => p.id === modalConfig.personId);
         if (person) {
-            person.items.push({
-                id: 'i_' + Date.now(),
+            const tempItemId = 'i_' + Date.now();
+            const newItem = {
+                id: tempItemId,
+                person_id: person.id,
                 text: val,
-                completed: false
-            });
+                completed: false,
+                position: person.items.length + 1
+            };
+            person.items.push(newItem);
             showToast("Artículo agregado");
+
+            if (window.supabaseClient) {
+                const { data } = await supabaseClient
+                    .from('items')
+                    .insert({ person_id: person.id, text: val, completed: false, position: newItem.position })
+                    .select()
+                    .single();
+                if (data) newItem.id = data.id;
+            }
         }
     } else if (modalConfig.type === 'edit_item') {
         const person = state.find(p => p.id === modalConfig.personId);
@@ -684,6 +750,13 @@ function handleModalSubmit(e) {
             if (item) {
                 item.text = val;
                 showToast("Artículo actualizado");
+
+                if (window.supabaseClient) {
+                    await supabaseClient
+                        .from('items')
+                        .update({ text: val })
+                        .eq('id', item.id);
+                }
             }
         }
     }
@@ -692,20 +765,34 @@ function handleModalSubmit(e) {
     saveState();
 }
 
-function deletePerson(personId) {
+async function deletePerson(personId) {
     if (confirm("¿Estás seguro de eliminar esta persona y todos sus artículos?")) {
         state = state.filter(p => p.id !== personId);
         saveState();
         showToast("Persona eliminada");
+
+        if (window.supabaseClient) {
+            await supabaseClient
+                .from('people')
+                .delete()
+                .eq('id', personId);
+        }
     }
 }
 
-function deleteItem(personId, itemId) {
+async function deleteItem(personId, itemId) {
     const person = state.find(p => p.id === personId);
     if (person) {
         person.items = person.items.filter(i => i.id !== itemId);
         saveState();
         showToast("Artículo eliminado");
+
+        if (window.supabaseClient) {
+            await supabaseClient
+                .from('items')
+                .delete()
+                .eq('id', itemId);
+        }
     }
 }
 
@@ -728,7 +815,7 @@ function showToast(message) {
 }
 
 // Inicializar al cargar el DOM o ventana
-window.addEventListener('DOMContentLoaded', () => {
-    loadState();
-    render();
+window.addEventListener('DOMContentLoaded', async () => {
+    await loadState();
+    setupSupabaseRealtime();
 });
