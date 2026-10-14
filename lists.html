@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Compras y Regalos</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Raleway', 'Lato', 'sans-serif'],
+                    },
+                    colors: {
+                        darkbg: '#0c0e12',
+                        darksurface: '#141820',
+                        darkcard: '#1c222c',
+                        darkinput: '#101319',
+                        darkborder: '#262f3d',
+                        brand: {
+                            teal: '#0d9488',
+                            tealHover: '#0f766e',
+                            tealDark: '#115e59',
+                            tealLight: '#14b8a6',
+                            tealBg: '#132e2b',
+                            tealBorder: '#1d4d47'
+                        },
+                        accent: {
+                            orange: '#ff5a1f',
+                            orangeHover: '#fa4b0d',
+                            green: '#22c55e',
+                            greenBg: '#102820',
+                            yellow: '#f59e0b'
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+    <!-- FontAwesome para iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Estilos personalizados -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-darkbg text-slate-100 min-h-screen transition-colors duration-300 selection:bg-brand-teal selection:text-white font-light">
+
+    <header class="sticky top-0 z-40 bg-darksurface/95 backdrop-blur-md border-b border-darkborder">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-md bg-darkcard border border-darkborder flex items-center justify-center text-brand-teal text-base">
+                    <i class="fa-solid fa-gift"></i>
+                </div>
+                <div>
+                    <h1 class="font-semibold text-base md:text-lg tracking-tight text-white flex items-center gap-2">
+                        Souvenirs
+                        <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded bg-accent-greenBg text-accent-green border border-accent-green/30">
+                            <i class="fa-solid fa-circle-check text-[10px]"></i> Active
+                        </span>
+                    </h1>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button onclick="openAddPersonModal()" class="bg-brand-teal hover:bg-brand-tealHover text-white text-sm font-medium px-4 py-2 rounded-lg transition active:scale-95 flex items-center gap-2 shadow-sm">
+                    <i class="fa-solid fa-user-plus text-xs"></i>
+                    <span class="hidden sm:inline">Nueva Persona</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 py-6 pb-28">
+        <!-- Dashboard general stats: contornos moderados -->
+        <section class="mb-6 bg-darksurface border border-darkborder rounded-lg p-4 shadow-sm">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Progreso Global</span>
+                <span id="global-progress-text" class="text-xs font-bold text-brand-tealLight">0%</span>
+            </div>
+            <div class="w-full bg-darkinput border border-darkborder/50 rounded-full h-2 overflow-hidden">
+                <div id="global-progress-bar" class="bg-brand-teal h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+            <div class="flex justify-between items-center mt-3 text-xs text-slate-400 font-normal">
+                <span id="stats-total">Total ítems: 0</span>
+                <button onclick="scrollToCompleted()" id="stats-completed" title="Ir a la sección de completados" class="text-accent-green hover:text-emerald-300 font-medium flex items-center gap-1.5 transition active:scale-95 cursor-pointer">
+                    <i class="fa-solid fa-check-double text-[11px]"></i> Comprados: 0
+                </button>
+            </div>
+        </section>
+
+        <!-- Search and filters bar -->
+        <div class="mb-6 flex gap-2">
+            <div class="relative flex-1">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                    <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                </span>
+                <input type="text" id="search-input" oninput="filterLists()" placeholder="Buscar persona o artículo..." class="w-full pl-9 pr-4 py-2.5 bg-darksurface border border-darkborder rounded-lg text-sm focus:outline-none focus:border-brand-teal text-slate-100 placeholder-slate-500 transition font-normal">
+            </div>
+            <button onclick="toggleExpandAll()" id="expand-btn" class="px-3.5 py-2.5 bg-darksurface hover:bg-darkcard text-slate-300 text-sm font-medium rounded-lg border border-darkborder transition flex items-center gap-2">
+                <i class="fa-solid fa-angles-down text-xs text-slate-400"></i>
+                <span class="hidden sm:inline">Expandir / Colapsar</span>
+            </button>
+        </div>
+
+        <!-- Container for lists -->
+        <div id="lists-container" class="space-y-4">
+            <!-- Dinámicamente inyectado mediante JavaScript -->
+        </div>
+
+        <!-- Empty state placeholder -->
+        <div id="empty-state" class="hidden text-center py-16 px-4">
+            <div class="w-14 h-14 bg-darksurface border border-darkborder text-slate-400 rounded-lg flex items-center justify-center mx-auto mb-4 text-xl">
+                <i class="fa-solid fa-box-open"></i>
+            </div>
+            <h3 class="text-slate-200 font-semibold text-base mb-1">No hay elementos guardados</h3>
+            <p class="text-slate-400 text-sm max-w-sm mx-auto mb-6">Comienza agregando una persona o restaurando los elementos de ejemplo iniciales.</p>
+            <button onclick="resetData()" class="bg-brand-teal hover:bg-brand-tealHover text-white text-sm font-medium px-4 py-2 rounded-lg transition">
+                Cargar datos de ejemplo
+            </button>
+        </div>
+    </main>
+
+    <!-- Modal genérico -->
+    <div id="modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm hidden p-4">
+        <div class="bg-darksurface border border-darkborder rounded-lg w-full max-w-md p-6 shadow-2xl transform transition-all">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modal-title" class="text-base font-semibold text-white">Nueva Persona</h3>
+                <button onclick="closeModal()" class="w-8 h-8 rounded-md text-slate-400 hover:text-slate-200 hover:bg-darkcard flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+            <form id="modal-form" onsubmit="handleModalSubmit(event)">
+                <div id="modal-body" class="space-y-4">
+                    <!-- Dinámico -->
+                </div>
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 bg-darkcard hover:bg-slate-700/60 border border-darkborder transition">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg text-sm font-semibold bg-brand-teal hover:bg-brand-tealHover text-white transition">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification toast -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-darksurface border border-darkborder text-slate-200 px-4 py-3 rounded-lg shadow-xl flex items-center gap-3">
+        <span class="w-6 h-6 rounded bg-accent-greenBg text-accent-green flex items-center justify-center text-xs">
+            <i class="fa-solid fa-check"></i>
+        </span>
+        <span id="toast-message" class="text-sm font-medium">Acción realizada con éxito</span>
+    </div>
+
+    <!-- Lógica JavaScript vinculada -->
+    <script src="app.js"></script>
+</body>
+</html>
